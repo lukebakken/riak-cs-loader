@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+
+source ./lib/common.bash
+check_s3cmd
+set -o nounset
+
+errfile=$(mktemp -t $0)
+exec 3> $errfile
+
+tempfoo=$(basename $0)
+myfifodir=$(mktemp -d -t ${tempfoo})
+
+function on_exit
+{
+  exec 3>&-
+  exec 4>&-
+
+  rm -rf $myfifodir
+  if [[ -s $errfile ]]
+  then
+    mv -f $errfile del-s3.err
+  else
+    rm -f $errfile
+  fi
+}
+trap on_exit EXIT
+
+data_dir='./load-s3-data'
+if [[ ! -d $data_dir ]]
+then
+  perr "Expected to find data dir $data_dir"
+fi
+
+myfifo="$myfifodir/$tempfoo.fifo"
+mkfifo -m 0700 "$myfifo"
+exec 4<> "$myfifo" # hook pipe up to descriptor 4 for read/write
+
+declare -i maximum=2 # max subprocesses at a time
+declare -i running=0 # current running count
+declare -i cpid=0
+
+for upload_log_file in $data_dir/*.log
+do
+  while IFS='|' read s3_file size
+  do
+    while (( running >= maximum ))
+    do
+      if read -u 4 cpid
+      then
+        wait $cpid
+        (( --running ))
+      fi
+    done
+
+    (
+      s3cmd_output="$(mktemp -t $0)"
+      ./s3cmd/s3cmd -c .s3cfg del "$s3_file" > "$s3cmd_output" 2>&1
+      if [[ $? != 0 ]]
+      then
+        cat >&3 <<EOT
+------------------------------------------------------------------------ 
+ERROR $? in s3cmd -c .s3cfg del "$s3_file"
+EOT
+      cat < "$s3cmd_output" >&3
+      cat >&3 <<EOT
+------------------------------------------------------------------------ 
+EOT
+      fi
+      rm -f "$s3cmd_output"
+      # TODO: sleep?
+      sleep 1
+      echo $BASHPID 1>&4
+    ) &
+
+    (( ++running ))
+
+  done < "$upload_log_file"
+done
+
+wait
+
+exit 0
+
