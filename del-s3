@@ -35,49 +35,78 @@ myfifo="$myfifodir/$tempfoo.fifo"
 mkfifo -m 0700 "$myfifo"
 exec 4<> "$myfifo" # hook pipe up to descriptor 4 for read/write
 
-declare -i maximum=2 # max subprocesses at a time
+declare -i del_count=0
+declare -i maximum=4 # max subprocesses at a time
 declare -i running=0 # current running count
 declare -i cpid=0
 
 for upload_log_file in $data_dir/*.log
 do
-  while IFS='|' read s3_file size
-  do
-    while (( running >= maximum ))
+  if [[ -s "$upload_log_file" ]]
+  then
+    while IFS='|' read s3_file size
     do
-      if read -u 4 cpid
-      then
-        wait $cpid
-        (( --running ))
-      fi
-    done
+      while (( running >= maximum ))
+      do
+        if read -u 4 cpid
+        then
+          (( ++del_count ))
+          wait $cpid
+          (( --running ))
+        fi
+      done
 
-    (
-      s3cmd_output="$(mktemp -t $0)"
-      ./s3cmd/s3cmd -c .s3cfg del "$s3_file" > "$s3cmd_output" 2>&1
-      if [[ $? != 0 ]]
+      declare -i upload_log_line_count=$(wc -l "$upload_log_file" | awk '{print $1}')
+      if (( upload_log_line_count > 5 ))
       then
-        cat >&3 <<EOT
+        if (( del_count > 5 && del_count % 5 == 0 ))
+        then
+          pinfo "deleting lines 1 through 5 in $upload_log_file"
+          sed -i '' "1,5d" "$upload_log_file"
+        fi
+      else
+        pinfo "deleting all in $upload_log_file"
+        > "$upload_log_file"
+      fi
+
+      (
+        s3cmd_output="$(mktemp -t $0)"
+        ./s3cmd/s3cmd -c .s3cfg del "$s3_file" > "$s3cmd_output" 2>&1
+        if [[ $? != 0 ]]
+        then
+          cat >&3 <<EOT
 ------------------------------------------------------------------------ 
 ERROR $? in s3cmd -c .s3cfg del "$s3_file"
 EOT
-      cat < "$s3cmd_output" >&3
-      cat >&3 <<EOT
+        cat < "$s3cmd_output" >&3
+        cat >&3 <<EOT
 ------------------------------------------------------------------------ 
 EOT
-      fi
-      rm -f "$s3cmd_output"
-      # TODO: sleep?
-      sleep 1
-      echo $BASHPID 1>&4
-    ) &
+        fi
+        rm -f "$s3cmd_output"
+        # TODO: sleep?
+        sleep 2
+        echo $BASHPID 1>&4
+      ) &
 
-    (( ++running ))
+      (( ++running ))
 
-  done < "$upload_log_file"
+    done < "$upload_log_file"
+  else
+    pwarn "zero-byte file: $upload_log_file"
+  fi
 done
 
-wait
+pinfo 'waiting for all subprocesses...'
+while (( running > 0 ))
+do
+  declare -i cpid=0
+  if read -u 4 cpid
+  then
+    wait $cpid
+    (( --running ))
+  fi
+done
 
 exit 0
 
