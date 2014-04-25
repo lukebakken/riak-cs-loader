@@ -40,8 +40,8 @@ exec 4<> "$myfifo" # hook pipe up to descriptor 4 for read/write
 
 declare -i maximum=2 # max subprocesses at a time
 declare -i running=0 # current running count
-declare -i cpid=0
 
+declare -i total_size=0
 declare -i file_count=0
 declare -i file_count_total=8
 
@@ -51,47 +51,55 @@ while (( file_count < file_count_total ))
 do
   while (( running >= maximum ))
   do
-    if read -u 4 cpid
+    declare -i cpid=0
+    declare -i size=0
+    if IFS='|' read -u 4 cpid size
     then
+      (( total_size += size ))
       wait $cpid
       (( --running ))
     fi
   done
-  (
-    declare -i size=$(( RANDOM * 256 ))
-    tmpfile="$(mktemp -t $0)"
-    outfile="$(mktemp -t $0)"
-    
-    dd if=/dev/urandom bs=$size file_count=1 2>/dev/null | openssl enc -a > "$tmpfile"
 
+  (
+    declare -i size=$(( (RANDOM * 256) + 1024 ))
+    tmpfile="$(mktemp -t $0)"
+    dd if=/dev/urandom bs=$size count=1 2>/dev/null | openssl enc -a > "$tmpfile"
     if [[ ! -s "$tmpfile" ]]
     then
-      errexit "zero-byte upload file: $tmpfile"
-    fi
-
-    s3_file="s3://test-bucket/file-${file_count}.txt"
-    ./s3cmd/s3cmd -c .s3cfg put "$tmpfile" "$s3_file" > "$outfile" 2>&1
-    if [[ $? == 0 ]]
-    then
-      echo "$s3_file|$size" >> "$upload_log"
+      perr "zero-byte upload file: $tmpfile"
+      rm -f "$tmpfile"
     else
-      cat >&3 <<EOT
+      s3cmd_output="$(mktemp -t $0)"
+
+      s3_file="s3://test-bucket/file-${file_count}.txt"
+      ./s3cmd/s3cmd -c .s3cfg put "$tmpfile" "$s3_file" > "$s3cmd_output" 2>&1
+      if [[ $? == 0 ]]
+      then
+        echo "$s3_file|$size" >> "$upload_log"
+      else
+        cat >&3 <<EOT
 ------------------------------------------------------------------------ 
 ERROR $? in s3cmd -c .s3cfg put "$tmpfile" "$s3_file"
 EOT
-      cat < "$outfile" >&3
+      cat < "$s3cmd_output" >&3
       cat >&3 <<EOT
 ------------------------------------------------------------------------ 
 EOT
+      fi
     fi
-    rm -f "$tmpfile" "$outfile"
-    # sleep $(( RANDOM % 3 + 1 ))
-    echo $BASHPID 1>&4
+    rm -f "$tmpfile" "$s3cmd_output"
+    echo "$BASHPID|$size" 1>&4
   ) &
+
   (( ++running ))
   (( ++file_count ))
+
 done
 
 wait
 
+echo "$total_size" > "${upload_log}.total"
+
 exit 0
+
