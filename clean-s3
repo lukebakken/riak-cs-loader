@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+source ./lib/common.bash
+check_s3cmd
+set -o nounset
+
+outfile=$(mktemp -t $0)
+
+trap "rm -f $outfile" EXIT
+
+./s3cmd/s3cmd -c .s3cfg ls s3://test-bucket > "$outfile"
+
+while read line
+do
+  s3_file="s3://${line#*s3://}"
+  echo $s3_file
+  ./s3cmd/s3cmd -c .s3cfg del "$s3_file"
+done < "$outfile"
+
