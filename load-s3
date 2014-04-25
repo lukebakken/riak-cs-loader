@@ -4,23 +4,32 @@ source ./lib/common.bash
 check_s3cmd
 set -o nounset
 
-errfile=$(mktemp -t $0)
+tempfoo=$(basename $0)
+# tempfoo is load-s3
+
+errfile=$(mktemp -t "$tempfoo")
 exec 3> $errfile
 
-tempfoo=$(basename $0)
 myfifodir=$(mktemp -d -t ${tempfoo})
+
+loadfifo="${tempfoo}.fifo"
+rm -f "$loadfifo"
+mkfifo -m 0700 "$loadfifo"
+exec 5<> "$loadfifo" # hook pipe up to descriptor 5
 
 function on_exit
 {
   exec 3>&-
   exec 4>&-
+  exec 5>&-
 
-  rm -rf $myfifodir
-  if [[ -s $errfile ]]
+  rm -f "$loadfifo"
+  rm -rf "$myfifodir"
+  if [[ -s "$errfile" ]]
   then
-    mv -f $errfile load-s3.err
+    mv -f "$errfile" load-s3.err
   else
-    rm -f $errfile
+    rm -f "$errfile"
   fi
 }
 trap on_exit EXIT
@@ -63,14 +72,14 @@ do
 
   (
     declare -i size=$(( (RANDOM * 384) + 1024 ))
-    tmpfile="$(mktemp -t $0)"
+    tmpfile="$(mktemp -t "$tempfoo")"
     dd if=/dev/urandom bs=$size count=1 2>/dev/null | openssl enc -a > "$tmpfile"
     if [[ ! -s "$tmpfile" ]]
     then
       perr "zero-byte upload file: $tmpfile"
       rm -f "$tmpfile"
     else
-      s3cmd_output="$(mktemp -t $0)"
+      s3cmd_output="$(mktemp -t "$tempfoo")"
 
       s3_file="s3://test-bucket/file-${file_count}.txt"
       ./s3cmd/s3cmd -c .s3cfg put "$tmpfile" "$s3_file" > "$s3cmd_output" 2>&1
@@ -89,6 +98,7 @@ EOT
       fi
     fi
     rm -f "$tmpfile" "$s3cmd_output"
+    echo "$s3_file" 1>&5
     echo "$BASHPID|$size" 1>&4
   ) &
 
