@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+set -o errexit
+set -o errtrace
+
+email="$1"
+if [[ -z $email ]]
+then
+    echo "first arg must be email addy" 1>&2
+    exit 1
+fi
+
+name="$2"
+if [[ -z $name ]]
+then
+    echo "second arg must be name" 1>&2
+    exit 1
+fi
+
+set -o nounset
+
+json_file=$(mktemp -t $0)
+
+trap "rm -f $json_file" EXIT
+
+cat >$json_file <<EOT
+{
+    "email": "$email",
+    "name": "$name"
+}
+EOT
+
+curl -H 'Content-Type: application/json' -X POST http://localhost:8080/riak-cs/user --data @$json_file
+echo ''
+exit 0
+
