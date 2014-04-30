@@ -1,4 +1,5 @@
 s3cmd-env/
 load-s3-data/
+load-s3-cache/
 *.out
 

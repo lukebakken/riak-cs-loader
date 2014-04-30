@@ -3,13 +3,18 @@ set -o errtrace
 
 bname="$(basename $0)"
 
+declare -i is_osx=0
+__tempfoo="${bname}.XXXXXXXXXX"
+if [[ $(uname -s) == 'Darwin' ]]
+then
+  is_osx=1
+  __tempfoo="${bname}"
+fi
+
 function make_temp_dir
 {
   local  __resultvar=$1
-
-  local tempfoo="${bname}.XXXXXXXXXX"
-  local tempdir=$(mktemp -d -t "$tempfoo")
-
+  local tempdir=$(mktemp -d -t "$__tempfoo")
   if [[ -n "$__resultvar" ]]
   then
     eval $__resultvar="'$tempdir'"
@@ -21,10 +26,7 @@ function make_temp_dir
 function make_temp_file
 {
   local  __resultvar=$1
-
-  local tempfoo="${bname}.XXXXXXXXXX"
-  local tempfile=$(mktemp -t "$tempfoo")
-
+  local tempfile=$(mktemp -t "$__tempfoo")
   if [[ -n "$__resultvar" ]]
   then
     eval $__resultvar="'$tempfile'"

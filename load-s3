@@ -38,6 +38,11 @@ if [[ ! -d $data_dir ]]
 then
   mkdir $data_dir
 fi
+cache_dir='./load-s3-cache'
+if [[ ! -d $cache_dir ]]
+then
+  mkdir $cache_dir
+fi
 
 start_time=$(date '+%Y-%m-%d_%H-%M-%S')
 upload_log="$data_dir/${start_time}.log"
@@ -54,6 +59,14 @@ declare -i total_size=0
 declare -i total_size_max=$(( 1024 * 1024 * 1024 * 1024 )) # 1TiB
 
 pinfo "total_size_max $total_size_max"
+
+rm -vf $cache_dir/*
+dd if=/dev/urandom bs=$((1024*1024)) count=1 2>/dev/null | openssl enc -a > $cache_dir/1.txt
+dd if=/dev/urandom bs=$((1024*1024*2)) count=1 2>/dev/null | openssl enc -a > $cache_dir/2.txt
+dd if=/dev/urandom bs=$((1024*1024*5)) count=1 2>/dev/null | openssl enc -a > $cache_dir/3.txt
+dd if=/dev/urandom bs=$((1024*1024*10)) count=1 2>/dev/null | openssl enc -a > $cache_dir/4.txt
+dd if=/dev/urandom bs=$((1024*1024*50)) count=1 2>/dev/null | openssl enc -a > $cache_dir/5.txt
+dd if=/dev/urandom bs=$((1024*1024*100)) count=1 2>/dev/null | openssl enc -a > $cache_dir/6.txt
 
 ./s3cmd/s3cmd -c .s3cfg mb s3://test-bucket
 
@@ -77,10 +90,14 @@ do
   fi
 
   (
-    declare -i size=$(( (RANDOM * 384) + 1024 ))
-    tmpfile=''
-    make_temp_file tmpfile
-    dd if=/dev/urandom bs=$size count=1 2>/dev/null | openssl enc -a > "$tmpfile"
+    # declare -i size=$(( (RANDOM * 384) + 1024 ))
+    # tmpfile=''
+    # make_temp_file tmpfile
+    # dd if=/dev/urandom bs=$size count=1 2>/dev/null | openssl enc -a > "$tmpfile"
+
+    declare -i tmpidx=$(( (file_count % 6) + 1 ))
+    tmpfile="$cache_dir/${tmpidx}.txt"
+
     if [[ ! -s "$tmpfile" ]]
     then
       perr "zero-byte upload file: $tmpfile"
