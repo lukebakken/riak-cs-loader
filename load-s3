@@ -97,13 +97,14 @@ do
 
     declare -i tmpidx=$(( (file_count % 6) + 1 ))
     tmpfile="$cache_dir/${tmpidx}.txt"
+    declare -i size=$(stat --printf='%s' "$tmpfile") # TODO: ubuntu only
 
+    s3cmd_output=''
     if [[ ! -s "$tmpfile" ]]
     then
       perr "zero-byte upload file: $tmpfile"
       rm -f "$tmpfile"
     else
-      s3cmd_output=''
       make_temp_file s3cmd_output
 
       s3_file="s3://test-bucket/file-${file_count}.txt"
@@ -122,7 +123,8 @@ EOT
 EOT
       fi
     fi
-    rm -f "$tmpfile" "$s3cmd_output"
+    # TODO rm -f "$tmpfile" "$s3cmd_output"
+    rm -f "$s3cmd_output"
     echo "$s3_file" 1>&5
     echo "$BASHPID|$size" 1>&4
   ) &
