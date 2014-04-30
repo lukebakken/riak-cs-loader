@@ -33,12 +33,12 @@ then
   perr "Expected to find data dir $data_dir"
 fi
 
-myfifo="$myfifodir/$tempfoo.fifo"
+myfifo="$myfifodir/${bname}.fifo"
 mkfifo -m 0700 "$myfifo"
 exec 4<> "$myfifo" # hook pipe up to descriptor 4 for read/write
 
 declare -i del_count=0
-declare -i maximum=4 # max subprocesses at a time
+declare -i maximum=16 # max subprocesses at a time
 declare -i running=0 # current running count
 declare -i cpid=0
 
@@ -59,7 +59,8 @@ then
     done
 
     (
-      s3cmd_output="$(mktemp -t "$tempfoo")"
+      s3cmd_output=''
+      make_temp_file s3cmd_output
       ./s3cmd/s3cmd -c .s3cfg del "$s3_file" > "$s3cmd_output" 2>&1
       if [[ $? != 0 ]]
       then
@@ -74,7 +75,7 @@ EOT
       fi
       rm -f "$s3cmd_output"
       # TODO: sleep?
-      sleep 2
+      # sleep 5
       echo $BASHPID 1>&4
     ) &
 
