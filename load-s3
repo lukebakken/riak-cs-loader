@@ -50,13 +50,15 @@ exec 4<> "$myfifo" # hook pipe up to descriptor 4 for read/write
 declare -i maximum=16 # max subprocesses at a time
 declare -i running=0 # current running count
 
+declare -i upload_count=0
 declare -i total_size=0
-declare -i file_count=0
-declare -i file_count_total=512
+declare -i total_size_max=$(( 1024 * 1024 * 1024 * 1024 )) # 1TiB
+
+pinfo "total_size_max $total_size_max"
 
 ./s3cmd/s3cmd -c .s3cfg mb s3://test-bucket
 
-while (( file_count < file_count_total ))
+while (( total_size < total_size_max ))
 do
   while (( running >= maximum ))
   do
@@ -65,10 +67,16 @@ do
     if IFS='|' read -u 4 cpid size
     then
       (( total_size += size ))
+      (( ++upload_count ))
       wait $cpid
       (( --running ))
     fi
   done
+
+  if (( upload_count % 128 == 0 ))
+  then
+    pinfo "uploaded $upload_count files, $total_size bytes"
+  fi
 
   (
     declare -i size=$(( (RANDOM * 384) + 1024 ))

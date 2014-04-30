@@ -1,7 +1,7 @@
 %awsSecretAccessKeys = (
     admin => {
-        id => 'PDTGY7F9HOINGB0JY-LD',
-        key => 'BT2xTX-GQ8yHX-Xzoijgfs1j7w4GyEp9gPu0Ew=='
+        id => 'EJ_QEPKWMPBKGCA9XPDG',
+        key => 'skPjWzxQ_ChatqVwnY15fmU8nRBYs-H-bH2hTA=='
     },
 );
 
