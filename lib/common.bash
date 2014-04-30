@@ -1,6 +1,38 @@
 set -o errexit
 set -o errtrace
 
+bname="$(basename $0)"
+
+function make_temp_dir
+{
+  local  __resultvar=$1
+
+  local tempfoo="${bname}.XXXXXXXXXX"
+  local tempdir=$(mktemp -d -t "$tempfoo")
+
+  if [[ -n "$__resultvar" ]]
+  then
+    eval $__resultvar="'$tempdir'"
+  else
+    echo "$tempdir"
+  fi
+}
+
+function make_temp_file
+{
+  local  __resultvar=$1
+
+  local tempfoo="${bname}.XXXXXXXXXX"
+  local tempfile=$(mktemp -t "$tempfoo")
+
+  if [[ -n "$__resultvar" ]]
+  then
+    eval $__resultvar="'$tempfile'"
+  else
+    echo "$tempfile"
+  fi
+}
+
 function now
 {
   date '+%Y-%m-%d %H:%M:%S'

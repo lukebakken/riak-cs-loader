@@ -4,11 +4,12 @@ source ./lib/common.bash
 check_s3cmd
 set -o nounset
 
-errfile=$(mktemp -t $0)
+errfile=''
+make_temp_file errfile
 exec 3> $errfile
 
-tempfoo=$(basename $0)
-myfifodir=$(mktemp -d -t ${tempfoo})
+myfifodir=''
+make_temp_dir myfifodir
 
 function on_exit
 {
@@ -31,7 +32,7 @@ then
   perr "Expected to find data dir $data_dir"
 fi
 
-myfifo="$myfifodir/$tempfoo.fifo"
+myfifo="$myfifodir/${bname}.fifo"
 mkfifo -m 0700 "$myfifo"
 exec 4<> "$myfifo" # hook pipe up to descriptor 4 for read/write
 
@@ -62,7 +63,7 @@ do
         if (( del_count > 5 && del_count % 5 == 0 ))
         then
           pinfo "deleting lines 1 through 5 in $upload_log_file"
-          sed -i '' "1,5d" "$upload_log_file"
+          sed -i.old -e'1,5d' "$upload_log_file"
         fi
       else
         pinfo "deleting all in $upload_log_file"
@@ -70,7 +71,8 @@ do
       fi
 
       (
-        s3cmd_output="$(mktemp -t $0)"
+        s3cmd_output=''
+        make_temp_file s3cmd_output
         ./s3cmd/s3cmd -c .s3cfg del "$s3_file" > "$s3cmd_output" 2>&1
         if [[ $? != 0 ]]
         then

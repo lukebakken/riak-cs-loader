@@ -4,13 +4,12 @@ source ./lib/common.bash
 check_s3cmd
 set -o nounset
 
-tempfoo=$(basename $0)
-# tempfoo is del-s3
-
-errfile=$(mktemp -t "$tempfoo")
+errfile=''
+make_temp_file errfile
 exec 3> $errfile
 
-myfifodir=$(mktemp -d -t ${tempfoo})
+myfifodir=''
+make_temp_dir myfifodir
 
 function on_exit
 {

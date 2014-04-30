@@ -4,15 +4,14 @@ source ./lib/common.bash
 check_s3cmd
 set -o nounset
 
-tempfoo=$(basename $0)
-# tempfoo is load-s3
-
-errfile=$(mktemp -t "$tempfoo")
+errfile=''
+make_temp_file errfile
 exec 3> $errfile
 
-myfifodir=$(mktemp -d -t ${tempfoo})
+myfifodir=''
+make_temp_dir myfifodir
 
-loadfifo="${tempfoo}.fifo"
+loadfifo="${bname}.fifo"
 rm -f "$loadfifo"
 mkfifo -m 0700 "$loadfifo"
 exec 5<> "$loadfifo" # hook pipe up to descriptor 5
@@ -43,14 +42,14 @@ fi
 start_time=$(date '+%Y-%m-%d_%H-%M-%S')
 upload_log="$data_dir/${start_time}.log"
 
-myfifo="$myfifodir/$tempfoo.fifo"
+myfifo="$myfifodir/${bname}.fifo"
 mkfifo -m 0700 "$myfifo"
 exec 4<> "$myfifo" # hook pipe up to descriptor 4 for read/write
 
 declare -i maximum=16 # max subprocesses at a time
 declare -i running=0 # current running count
 
-declare -i upload_count=0
+declare -i file_count=0
 declare -i total_size=0
 declare -i total_size_max=$(( 1024 * 1024 * 1024 * 1024 )) # 1TiB
 
@@ -67,27 +66,28 @@ do
     if IFS='|' read -u 4 cpid size
     then
       (( total_size += size ))
-      (( ++upload_count ))
       wait $cpid
       (( --running ))
     fi
   done
 
-  if (( upload_count % 128 == 0 ))
+  if (( file_count % 128 == 0 ))
   then
-    pinfo "uploaded $upload_count files, $total_size bytes"
+    pinfo "uploaded $file_count files, $total_size bytes"
   fi
 
   (
     declare -i size=$(( (RANDOM * 384) + 1024 ))
-    tmpfile="$(mktemp -t "$tempfoo")"
+    tmpfile=''
+    make_temp_file tmpfile
     dd if=/dev/urandom bs=$size count=1 2>/dev/null | openssl enc -a > "$tmpfile"
     if [[ ! -s "$tmpfile" ]]
     then
       perr "zero-byte upload file: $tmpfile"
       rm -f "$tmpfile"
     else
-      s3cmd_output="$(mktemp -t "$tempfoo")"
+      s3cmd_output=''
+      make_temp_file s3cmd_output
 
       s3_file="s3://test-bucket/file-${file_count}.txt"
       ./s3cmd/s3cmd -c .s3cfg put "$tmpfile" "$s3_file" > "$s3cmd_output" 2>&1
