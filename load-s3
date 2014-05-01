@@ -62,12 +62,12 @@ pinfo "total_size_max $total_size_max"
 
 rm -vf $cache_dir/*
 
-declare -A upload_files
+declare -a upload_files
 declare -i bs=$((1024*1024))
 declare -i i=0
-for i in {0..6}
+for i in {0..9}
 do
-  declare -i count=$((10**$i))
+  declare -i count=$((2**$i))
   pinfo "creating upload file. bs $bs count $count"
   dd if=/dev/urandom bs=$bs count=$count 2>/dev/null | openssl enc -a > $cache_dir/$i.txt
   upload_files[$i]=$(($bs * $count)) # NB: capture the size
@@ -95,7 +95,7 @@ do
   fi
 
   (
-    declare -i tmpidx=$((file_count % 6))
+    declare -i tmpidx=$((file_count % 10)) # modulus must be one greater than file cache count
     tmpfile="$cache_dir/${tmpidx}.txt"
     declare -i size=${upload_files[$tmpidx]}
 
@@ -148,6 +148,7 @@ do
 done
 
 echo "$total_size" > "${upload_log}.total"
+pinfo "done: uploaded $file_count files, $total_size bytes"
 
 exit 0
 
