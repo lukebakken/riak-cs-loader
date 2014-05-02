@@ -38,7 +38,7 @@ if [[ ! -d $data_dir ]]
 then
   mkdir $data_dir
 fi
-cache_dir='./load-s3-cache'
+cache_dir='/tmp/load-s3-cache'
 if [[ ! -d $cache_dir ]]
 then
   mkdir $cache_dir
@@ -51,29 +51,31 @@ myfifo="$myfifodir/${bname}.fifo"
 mkfifo -m 0700 "$myfifo"
 exec 4<> "$myfifo" # hook pipe up to descriptor 4 for read/write
 
-declare -i maximum=16 # max subprocesses at a time
+declare -i maximum=32 # max subprocesses at a time
 declare -i running=0 # current running count
 
 declare -i file_count=0
 declare -i total_size=0
-declare -i total_size_max=$(( 1024 * 1024 * 1024 * 1024 )) # 1TiB
+declare -i total_size_max=$(( 4 * 1024 * 1024 * 1024 * 1024 )) # 4TiB
 
 pinfo "total_size_max $total_size_max"
-
-rm -vf $cache_dir/*
 
 declare -a upload_files
 declare -i bs=$((1024*1024))
 declare -i i=0
-for i in {0..9}
+for i in {0..11}
 do
   declare -i count=$((2**$i))
-  pinfo "creating upload file. bs $bs count $count"
-  dd if=/dev/urandom bs=$bs count=$count 2>/dev/null | openssl enc -a > $cache_dir/$i.txt
+  upload_file="$cache_dir/${i}.txt"
+  if [[ ! -s $upload_file ]]
+  then
+    pinfo "creating upload file. bs $bs count $count"
+    dd if=/dev/urandom bs=$bs count=$count 2>/dev/null | openssl enc -a > "$upload_file"
+  fi
   upload_files[$i]=$(($bs * $count)) # NB: capture the size
 done
 
-./s3cmd/s3cmd -c .s3cfg mb s3://test-bucket
+./s3cmd/s3cmd -c ./.s3cfg mb s3://test-bucket
 
 while (( total_size < total_size_max ))
 do
@@ -95,7 +97,7 @@ do
   fi
 
   (
-    declare -i tmpidx=$((file_count % 10)) # modulus must be one greater than file cache count
+    declare -i tmpidx=$((file_count % 12)) # modulus must be one greater than file cache count
     tmpfile="$cache_dir/${tmpidx}.txt"
     declare -i size=${upload_files[$tmpidx]}
 
@@ -108,14 +110,14 @@ do
       make_temp_file s3cmd_output
 
       s3_file="s3://test-bucket/file-${file_count}.txt"
-      ./s3cmd/s3cmd -c .s3cfg put "$tmpfile" "$s3_file" > "$s3cmd_output" 2>&1
+      ./s3cmd/s3cmd -c ./.s3cfg put "$tmpfile" "$s3_file" > "$s3cmd_output" 2>&1
       if [[ $? == 0 ]]
       then
         echo "$s3_file|$size" >> "$upload_log"
       else
         cat >&3 <<EOT
 ------------------------------------------------------------------------ 
-ERROR $? in s3cmd -c .s3cfg put "$tmpfile" "$s3_file"
+ERROR $? in s3cmd -c ./.s3cfg put "$tmpfile" "$s3_file"
 EOT
       cat < "$s3cmd_output" >&3
       cat >&3 <<EOT

@@ -38,7 +38,7 @@ mkfifo -m 0700 "$myfifo"
 exec 4<> "$myfifo" # hook pipe up to descriptor 4 for read/write
 
 declare -i del_count=0
-declare -i maximum=16 # max subprocesses at a time
+declare -i maximum=24 # max subprocesses at a time
 declare -i running=0 # current running count
 declare -i cpid=0
 
