@@ -63,7 +63,7 @@ pinfo "total_size_max $total_size_max"
 declare -a upload_files
 declare -i bs=$((1024*1024))
 declare -i i=0
-for i in {0..11}
+for i in {0..10}
 do
   declare -i count=$((2**$i))
   upload_file="$cache_dir/${i}.txt"
@@ -97,7 +97,7 @@ do
   fi
 
   (
-    declare -i tmpidx=$((file_count % 12)) # modulus must be one greater than file cache count
+    declare -i tmpidx=$((file_count % 11)) # modulus must be one greater than file cache count
     tmpfile="$cache_dir/${tmpidx}.txt"
     declare -i size=${upload_files[$tmpidx]}
 
